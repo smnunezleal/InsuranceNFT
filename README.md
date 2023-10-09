@@ -42,11 +42,8 @@ Replace <your_rpc_url> and <your_private_key> with your actual RPC URL and priva
    forge script script/InsuranceNFT.s.sol:InsuranceNFTScript --rpc-url <your_rpc_url> --private-key <your_private_key>
 
 ## Testing
-
 Ensure to have a local Ethereum node like Anvil running.
 
-```sh
-   forge test
 
 ## Security
 This project is in development. Use at your own risk. Always ensure to thoroughly test the smart contracts and have them audited before deploying them on the mainnet.
@@ -56,4 +53,6 @@ Contributions are welcome! Please read the contributing guidelines first.
 
 ## License
 MIT
+   
+
 
