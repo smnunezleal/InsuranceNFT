@@ -44,7 +44,6 @@ Replace <your_rpc_url> and <your_private_key> with your actual RPC URL and priva
 ## Testing
 Ensure to have a local Ethereum node like Anvil running.
 
-    ```sh
     forge build
 
 ## Security
