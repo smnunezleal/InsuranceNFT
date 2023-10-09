@@ -44,6 +44,8 @@ Replace <your_rpc_url> and <your_private_key> with your actual RPC URL and priva
 ## Testing
 Ensure to have a local Ethereum node like Anvil running.
 
+    ```sh
+    forge build
 
 ## Security
 This project is in development. Use at your own risk. Always ensure to thoroughly test the smart contracts and have them audited before deploying them on the mainnet.

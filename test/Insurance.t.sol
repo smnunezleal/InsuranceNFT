@@ -1,55 +1,216 @@
-// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {InsuranceNFT} from "../src/InsuranceNFT.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract CounterTest is Test {
-    const {expect} = require("chai");
+contract InsuranceNFTTest is Test {
+    InsuranceNFT public insuranceNFT;
+    IERC20 public usdc;
 
-    describe("InsuranceNFT", function() {
-        let insuranceNFT, usdc, owner, user;
+    function setUp() public {
+        // Assuming you have a deployed USDC contract or a mock one for testing
+        address usdcAddress = address(0x...); // Replace with actual address
+        usdc = IERC20(usdcAddress);
 
-        beforeEach(async () => {
-            [owner, user] = await ethers.getSigners();
+        // Deploy InsuranceNFT contract
+        insuranceNFT = new InsuranceNFT(usdcAddress, address(this), address(0x...)); // Replace with actual lending protocol address
+    }
 
-            // Deploy a mock USDC contract
-            const ERC20 = await ethers.getContractFactory("ERC20");
-            usdc = await ERC20.deploy("USDC", "USDC");
-            await usdc.deployed();
+    function test_PurchaseInsurance() public {
+        uint256 initialBalance = 1000;
+        uint256 insuranceCost = 100;
 
-            // Deploy the InsuranceNFT contract
-            const InsuranceNFT = await ethers.getContractFactory("InsuranceNFT");
-            insuranceNFT = await InsuranceNFT.deploy(usdc.address, owner.address, /* lendingProtocol address */);
-            await insuranceNFT.deployed();
+        // Mint some USDC for the InsuranceNFT contract
+        // This might require a mock USDC contract that allows for minting
+        usdc.mint(address(insuranceNFT), initialBalance);
 
-            // Mint some USDC for the user
-            await usdc.mint(user.address, ethers.utils.parseEther("1000"));
-        });
+        // Approve the InsuranceNFT contract to spend USDC
+        usdc.approve(address(insuranceNFT), insuranceCost);
 
-        it("Should allow purchasing of insurance", async function() {
-            // Approve the InsuranceNFT contract to spend user's USDC
-            await usdc.connect(user).approve(insuranceNFT.address, ethers.utils.parseEther("100"));
+        // Purchase insurance
+        insuranceNFT.purchaseInsurance(insuranceCost, "ipfs://metadata_uri");
 
-            // User purchases insurance
-            await insuranceNFT.connect(user).purchaseInsurance(ethers.utils.parseEther("100"), "ipfs://metadata_uri");
+        // Check USDC balance of InsuranceNFT contract
+        assertEq(usdc.balanceOf(address(insuranceNFT)), initialBalance - insuranceCost);
 
-            // Check that the user's USDC balance decreased
-            expect(await usdc.balanceOf(user.address)).to.equal(ethers.utils.parseEther("900"));
+        // Check NFT ownership
+        assertEq(insuranceNFT.ownerOf(1), address(this));
 
-            // Check that the InsuranceNFT contract's USDC balance increased
-            expect(await usdc.balanceOf(insuranceNFT.address)).to.equal(ethers.utils.parseEther("100"));
+        // Check policy data
+        (address policyHolder, uint256 amountInsured, string memory uri, bool isClaimable) = insuranceNFT.policies(1);
+        assertEq(policyHolder, address(this));
+        assertEq(amountInsured, insuranceCost);
+        assertEq(uri, "ipfs://metadata_uri");
+        assertEq(isClaimable, false);
+    }
 
-            // Check that the NFT was minted to the user
-            expect(await insuranceNFT.ownerOf(1)).to.equal(user.address);
+    function test_PurchaseAndClaimInsurance() public {
+        uint256 initialBalance = 1000;
+        uint256 insuranceCost = 100;
 
-            // Check that the policy data is correct
-            const policy = await insuranceNFT.policies(1);
-            expect(policy.policyHolder).to.equal(user.address);
-            expect(policy.amountInsured).to.equal(ethers.utils.parseEther("100"));
-            expect(policy.uri).to.equal("ipfs://metadata_uri");
-            expect(policy.isClaimable).to.equal(false);
-        });
-    });
+        // Mint some USDC for the InsuranceNFT contract
+        // This might require a mock USDC contract that allows for minting
+        usdc.mint(address(insuranceNFT), initialBalance);
+
+        // Approve the InsuranceNFT contract to spend USDC
+        usdc.approve(address(insuranceNFT), insuranceCost);
+
+        // Purchase insurance
+        insuranceNFT.purchaseInsurance(insuranceCost, "ipfs://metadata_uri");
+
+        // Check USDC balance of InsuranceNFT contract
+        assertEq(usdc.balanceOf(address(insuranceNFT)), initialBalance - insuranceCost);
+
+        // Check NFT ownership
+        assertEq(insuranceNFT.ownerOf(1), address(this));
+
+        // Check policy data
+        (address policyHolder, uint256 amountInsured, string memory uri, bool isClaimable) = insuranceNFT.policies(1);
+        assertEq(policyHolder, address(this));
+        assertEq(amountInsured, insuranceCost);
+        assertEq(uri, "ipfs://metadata_uri");
+        assertEq(isClaimable, false);
+
+        // Make the policy claimable
+        insuranceNFT.updatePolicyClaimable(1, true);
+
+        // Claim insurance
+        insuranceNFT.claimInsurance(1);
+
+        // Check that the policy is deleted
+        (policyHolder, amountInsured, uri, isClaimable) = insuranceNFT.policies(1);
+        assertEq(policyHolder, address(0));
+        assertEq(amountInsured, 0);
+        assertEq(uri, "");
+        assertEq(isClaimable, false);
+
+        // Check that the USDC balance of the InsuranceNFT contract is reduced
+        assertEq(usdc.balanceOf(address(insuranceNFT)), initialBalance - 2 * insuranceCost);
+    }
+
+    function test_UpdatePolicyClaimable() public {
+        uint256 initialBalance = 1000;
+        uint256 insuranceCost = 100;
+
+        // Mint some USDC for the InsuranceNFT contract
+        // This might require a mock USDC contract that allows for minting
+        usdc.mint(address(insuranceNFT), initialBalance);
+
+        // Approve the InsuranceNFT contract to spend USDC
+        usdc.approve(address(insuranceNFT), insuranceCost);
+
+        // Purchase insurance
+        insuranceNFT.purchaseInsurance(insuranceCost, "ipfs://metadata_uri");
+
+        // Check policy data
+        (address policyHolder, uint256 amountInsured, string memory uri, bool isClaimable) = insuranceNFT.policies(1);
+        assertEq(policyHolder, address(this));
+        assertEq(amountInsured, insuranceCost);
+        assertEq(uri, "ipfs://metadata_uri");
+        assertEq(isClaimable, false);
+
+        // Update policy claimable status
+        insuranceNFT.updatePolicyClaimable(1, true);
+
+        // Check that the policy is now claimable
+        (policyHolder, amountInsured, uri, isClaimable) = insuranceNFT.policies(1);
+        assertEq(isClaimable, true);
+    }
+
+    function test_UnauthorizedUpdatePolicyClaimable() public {
+        uint256 initialBalance = 1000;
+        uint256 insuranceCost = 100;
+
+        // Mint some USDC for the InsuranceNFT contract
+        // This might require a mock USDC contract that allows for minting
+        usdc.mint(address(insuranceNFT), initialBalance);
+
+        // Approve the InsuranceNFT contract to spend USDC
+        usdc.approve(address(insuranceNFT), insuranceCost);
+
+        // Purchase insurance
+        insuranceNFT.purchaseInsurance(insuranceCost, "ipfs://metadata_uri");
+
+        // Try to update policy claimable status from unauthorized address and expect it to be reverted
+        try insuranceNFT.connect(unauthorizedAddress).updatePolicyClaimable(1, true) {
+            fail("Update policy claimable did not revert with unauthorized address");
+        } catch Error(string memory reason) {
+            assertEq(reason, "Not the oracle");
+        }
+    }
+
+    function test_ConfirmNewGovernance() public {
+        // Propose new governance
+        address newGovernanceAddress = address(0xDEF...); // Replace with actual address
+        insuranceNFT.proposeNewGovernance(newGovernanceAddress);
+        
+        // Fast forward time (if Forge supports it, otherwise, you may need to wait)
+        // fastForwardTime(TIMELOCK + 1);
+        
+        // Confirm new governance
+        insuranceNFT.confirmNewGovernance();
+        
+        // Check that the governance address is updated
+        assertEq(insuranceNFT.governance(), newGovernanceAddress);
+    }
+
+    function test_WithdrawFunds() public {
+        uint256 insuranceCost = 100;
+        
+        // Purchase insurance
+        usdc.mint(address(insuranceNFT), insuranceCost);
+        usdc.approve(address(insuranceNFT), insuranceCost);
+        insuranceNFT.purchaseInsurance(insuranceCost, "ipfs://metadata_uri");
+        
+        // Make the policy claimable
+        insuranceNFT.updatePolicyClaimable(1, true);
+        
+        // Claim insurance
+        insuranceNFT.claimInsurance(1);
+        
+        // Check that the funds are available for withdrawal
+        assertEq(insuranceNFT.pendingWithdrawals(address(this)), insuranceCost);
+        
+        // Withdraw funds
+        insuranceNFT.withdraw();
+        
+        // Check that the funds have been withdrawn
+        assertEq(insuranceNFT.pendingWithdrawals(address(this)), 0);
+        assertEq(usdc.balanceOf(address(this)), insuranceCost);
+    }
+
+    function test_UpdateOracleAddress() public {
+        // Update oracle address
+        address newOracleAddress = address(0x123...); // Replace with actual address
+        insuranceNFT.updateOracle(newOracleAddress);
+        
+        // Check that the oracle address is updated
+        assertEq(insuranceNFT.oracle(), newOracleAddress);
+    }
+
+    function test_GetUserPosition() public {
+        // Assuming the lending protocol contract is set up and has user positions
+        
+        // Get user position
+        (uint256 totalCollateral, uint256 totalDebt) = insuranceNFT.getUserPosition(address(this));
+        
+        // Check that the user position is returned correctly
+        // You may need to adjust the expected values based on the setup of your lending protocol contract
+        assertEq(totalCollateral, /* expected collateral value */);
+        assertEq(totalDebt, /* expected debt value */);
+    }
+
+    function test_GetUserPosition() public {
+        // Assuming the lending protocol contract is set up and has user positions
+        
+        // Get user position
+        (uint256 totalCollateral, uint256 totalDebt) = insuranceNFT.getUserPosition(address(this));
+        
+        // Check that the user position is returned correctly
+        // You may need to adjust the expected values based on the setup of your lending protocol contract
+        assertEq(totalCollateral, /* expected collateral value */);
+        assertEq(totalDebt, /* expected debt value */);
+    }
 
 }

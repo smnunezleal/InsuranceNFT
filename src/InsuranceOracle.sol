@@ -2,10 +2,13 @@
 pragma solidity ^0.8.0;
 
 import "@chainlink/contracts/src/v0.8/ChainlinkClient.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract InsuranceOracle is ChainlinkClient, Ownable {
+contract InsuranceOracle is ChainlinkClient, AccessControl {
     using Chainlink for Chainlink.Request;
+
+    bytes32 public constant OWNER_ROLE = keccak256("OWNER_ROLE");
+    bytes32 public constant ORACLE_ROLE = keccak256("ORACLE_ROLE");
 
     mapping(uint256 => bool) public policyClaimable;
     mapping(bytes32 => uint256) public requestToPolicy;
@@ -20,13 +23,26 @@ contract InsuranceOracle is ChainlinkClient, Ownable {
     event ChainlinkFailed(bytes32 requestId);
 
     constructor(address _oracle, bytes32 _jobId, uint256 _fee) {
+        _setupRole(OWNER_ROLE, msg.sender);
+        _setRoleAdmin(ORACLE_ROLE, OWNER_ROLE);
+
         setPublicChainlinkToken();
         oracle = _oracle;
         jobId = _jobId;
         fee = _fee;
     }
     
-    function updatePolicyClaimable(uint256 _policyId, bool _isClaimable) external onlyOwner {
+    modifier onlyOwner() {
+        require(hasRole(OWNER_ROLE, msg.sender), "Not the contract owner");
+        _;
+    }
+
+    modifier onlyOracle() {
+        require(hasRole(ORACLE_ROLE, msg.sender), "Not the oracle");
+        _;
+    }
+    
+    function updatePolicyClaimable(uint256 _policyId, bool _isClaimable) external onlyOracle {
         policyClaimable[_policyId] = _isClaimable;
         emit PolicyUpdated(_policyId, _isClaimable);
     }
@@ -68,5 +84,13 @@ contract InsuranceOracle is ChainlinkClient, Ownable {
         oracle = _oracle;
         jobId = _jobId;
         fee = _fee;
+    }
+
+    function grantOracleRole(address _oracleAddress) external onlyOwner {
+        grantRole(ORACLE_ROLE, _oracleAddress);
+    }
+
+    function revokeOracleRole(address _oracleAddress) external onlyOwner {
+        revokeRole(ORACLE_ROLE, _oracleAddress);
     }
 }
